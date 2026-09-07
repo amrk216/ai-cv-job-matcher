@@ -5,26 +5,53 @@ from datetime import timedelta
 import json_repair
 from temporalio import workflow
 from temporalio.common import RetryPolicy
-from DataClasses import PDFSummaryInput,PDFSummaryOutput
-from helpers import DEFAULT_RETRY_POLICY
-from prompts import _SUMMARY_PROMPT
+
+
+
 with workflow.unsafe.imports_passed_through():
-    from activites import(
-        extract_pdf,ExtractPDFInput,
-        call_llm,CallLLMInput
+    from .DataClasses import (
+        PDFSummaryInput,
+        PDFSummaryOutput,
     )
 
+    from .prompts import _SUMMARY_PROMPT
+
+     
+    from .activites import (
+        extract_pdf,
+        ExtractPDFInput,
+        call_llm,
+        CallLLMInput,
+        load_job_description 
+    )
+
+DEFAULT_RETRY_POLICY = RetryPolicy(
+    initial_interval=timedelta(seconds=3),
+    backoff_coefficient=2.0,
+    maximum_interval=timedelta(seconds=60),
+    maximum_attempts=4
+
+)
 #----------------workflow--------------
 @workflow.defn
 class PDFSummaryWorkflow:
     @workflow.run
-    async def run(param:PDFSummaryInput)->PDFSummaryOutput:
+    async def run(self,params:PDFSummaryInput)->PDFSummaryOutput:
+
+
+        job_description = await workflow.execute_activity(
+        load_job_description,
+        params.job_id,
+        start_to_close_timeout=timedelta(seconds=30)
+    )
 
         #step 1-> extract pdf content
         extract_md = await workflow.execute_activity(
             extract_pdf,
             ExtractPDFInput(
-                s3_path = param.s3_path
+                s3_path = params.s3_path,
+                
+                
             ),
             retry_policy = DEFAULT_RETRY_POLICY,
             start_to_close_timeout=timedelta(minutes=20),
@@ -32,7 +59,8 @@ class PDFSummaryWorkflow:
         )
         # setp -> call llm to summarize to content and extract key risks
         prompt = _SUMMARY_PROMPT.format(
-            text = extract_md.markdown_text[0:]
+            job_description=job_description,
+            resume=extract_md.markdown_text
         )
 
         llm_result = await workflow.execute_activity(
@@ -52,7 +80,7 @@ class PDFSummaryWorkflow:
     )
 
         return PDFSummaryOutput(
-            s3_path=param.s3_path,
+            s3_path=params.s3_path,
             candidate_summary=parsed_output.get("candidate_summary", ""),
             ats_score=parsed_output.get("ats_score", 0),
             job_match_score=parsed_output.get("job_match_score", 0),

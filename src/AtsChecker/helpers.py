@@ -20,9 +20,38 @@ def parse_s3_path(s3_path:str):
     bucket,_,key = s3_path_no_scheme.partition('/')
     return bucket,key
 
+def save_job_description(
+    job_id: str,
+    job_description: str,
+    bucket: str = "ats"
+) -> str:
 
-DEFAULT_RETRY_POLICY = RetryPolicy(
-    initial_interval=timedelta(seconds=3),
-    backoff_coefficient=2.0,
-    maximum_interval=timedelta(seconds=60),
-    maximum_attempts=4)
+    s3_client = get_s3_path()
+
+    key = f"jobs/{job_id}.txt"
+
+    s3_client.put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=job_description.encode("utf-8"),
+        ContentType="text/plain"
+    )
+
+    return f"s3://{bucket}/{key}"
+
+
+def get_job_description(
+    job_id: str,
+    bucket: str = "ats"
+) -> str:
+
+    s3_client = get_s3_path()
+
+    key = f"jobs/{job_id}.txt"
+
+    response = s3_client.get_object(
+        Bucket=bucket,
+        Key=key
+    )
+
+    return response["Body"].read().decode("utf-8")

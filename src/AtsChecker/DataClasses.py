@@ -28,11 +28,31 @@ class CallLLMOutput:
 @dataclass 
 class PDFSummaryInput:
     s3_path : str
+    job_id:str
 
-@dataclass
+@dataclass(frozen=True)
 class PDFSummaryOutput:
     s3_path: str
     candidate_summary: str
     ats_score: int
     job_match_score: int
     decision: str
+
+
+
+#-------------------Parent Workflow----------------
+
+
+@dataclass
+class ContractReviewInput:
+    s3_path : list
+    job_id: str
+    max_revisions : int = 3 
+
+
+@dataclass 
+class ContractReviewOutput:
+    report : str
+    source : list
+    approved_by : str
+

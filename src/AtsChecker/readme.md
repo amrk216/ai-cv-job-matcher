@@ -10,3 +10,16 @@ $ conda activate ats
 ```
 $ pip install -r requirements.txt
 ```
+
+
+{
+  "s3_path": "s3://ats/cvs/cv2.pdf"
+}
+
+
+
+uvicorn AtsChecker.client.main:app --reload
+
+
+
+python -m AtsChecker.worker

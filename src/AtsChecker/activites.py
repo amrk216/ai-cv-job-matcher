@@ -3,6 +3,7 @@ import math
 from pathlib import Path
 import tempfile
 from dataclasses import dataclass
+import uuid
 
 import boto3
 import fitz  #pyMuPDF  --page-by-page extraction
@@ -12,8 +13,8 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from temporalio import activity
 
-from DataClasses import ExtractPDFInput,ExtractPDFOutput,CallLLMInput,CallLLMOutput
-from helpers import get_s3_path,parse_s3_path
+from .DataClasses import ExtractPDFInput,ExtractPDFOutput,CallLLMInput,CallLLMOutput
+from .helpers import get_job_description, get_s3_path,parse_s3_path, save_job_description
 
 #activity 1 : Extract pdf from s3 
 @activity.defn
@@ -37,7 +38,14 @@ async def extract_pdf(params:ExtractPDFInput)-> ExtractPDFOutput:
     filename = Path(key).name
     TEMP_DIR = os.environ['TEMP_DIR']
 
-    local_path = str(Path(TEMP_DIR/filename))
+    local_path = str(Path(TEMP_DIR)/filename)
+
+    #  Download PDF from S3
+    s3_client.download_file(
+        bucket,
+        key,
+        local_path
+    )
 
     doc = fitz.open(local_path)
     total_pages = doc.page_count
@@ -89,10 +97,24 @@ async def extract_pdf(params:ExtractPDFInput)-> ExtractPDFOutput:
         page_count=total_pages
         )
 
+
+
+
+@activity.defn
+async def load_job_description(job_id: str) -> str:
+
+    activity.logger.info(
+        f"Loading job description: {job_id}"
+    )
+
+    job_description = get_job_description(job_id)
+
+    return job_description
+
 # activite 2 : call llm
 @activity.defn
 async def call_llm(params:CallLLMInput)->CallLLMOutput:
-    activity.info(f"Calling LLM")
+    activity.logger.info(f"Calling LLM")
     activity.heartbeat({
         "stage" : "Calling....",
         "prompt_chats": len(params.prompt)
@@ -101,13 +123,13 @@ async def call_llm(params:CallLLMInput)->CallLLMOutput:
 
     llm_client = OpenAI(
         api_key= os.environ["API_KEY"],
-        base_url="https://inference.dahl.global/v1"
+        base_url=os.environ['BASE_URL']
     )
 
     response = llm_client.chat.completions.create(
         model = os.environ.get('MODEL_NAME'),
         messages = [{"role":"user","content":params.prompt}],
-        max_tokens=1000
+        max_tokens=5000
     )
 
     content = response.choices[0].message.content
