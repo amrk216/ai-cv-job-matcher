@@ -1,0 +1,7 @@
+pymupdf4llm==1.28.0
+pymupdf==1.28.0
+temporalio==1.29.0
+openai==2.47.0
+json-repair==0.61.7
+boto3==1.43.42
+python-dotenv==1.2.2
